@@ -1,287 +1,492 @@
+import socket
 import tkinter as tk
 from tkinter import ttk
-import threading
-import time
-import a2s
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+from collections import deque
+import time
+import threading
+import csv
+from datetime import datetime, timezone
+import os
+import subprocess
 
+# Constants
+SERVER_ADDRESS = ('79.127.217.197', 22912)
+TIMEOUT = 5  # seconds
+CSV_FILENAME = "player_log.csv"
+ORDINANCE_START = datetime(2025, 5, 20, 0, 0, 0, tzinfo=timezone.utc)
+MAX_DATA_POINTS = 60
+UPDATE_INTERVAL = 5  # seconds
 
-class ServerTab:
-    def __init__(self, notebook, ip, port):
-        self.ip = ip
-        self.port = port
-        self.source_tv_port = 27013  # Standard SourceTV port
-        self.running = True
-        self.data = []
-        self.times = []
-        self.start_time = time.time()
-        self.lock = threading.Lock()
-        self.current_map = "Unknown"
-        self.players = []
-        self.main_server_online = False
-        self.source_tv_online = False
+# Module Imports and Initialization
+try:
+    import pygame
+    pygame.mixer.init()
+    PYGAME_AVAILABLE = True
+except ImportError:
+    PYGAME_AVAILABLE = False
+    print("Warning: pygame not available, sound effects disabled")
 
-        self.frame = ttk.Frame(notebook)
-        notebook.add(self.frame, text=f"{ip}:{port}")
+try:
+    from a2s.info import info as a2s_info
+    from a2s.players import players as a2s_players
+    A2S_AVAILABLE = True
+except ImportError:
+    A2S_AVAILABLE = False
+    print("Warning: python-a2s not installed properly")
 
-        # Create main container with 2 columns
-        self.main_container = ttk.Frame(self.frame)
-        self.main_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # Left column for the graph
-        self.graph_frame = ttk.Frame(self.main_container)
-        self.graph_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-
-        # Right column for player info
-        self.info_frame = ttk.Frame(self.main_container)
-        self.info_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-
-        # Configure grid weights
-        self.main_container.columnconfigure(0, weight=3)
-        self.main_container.columnconfigure(1, weight=1)
-        self.main_container.rowconfigure(0, weight=1)
-
-        # Graph setup
-        plt.style.use('dark_background')
-        self.fig, self.ax = plt.subplots(figsize=(6, 4), dpi=100, facecolor='#2e2e2e')
-        self.ax.set_title("Players on CGE7-193", color='white')
-        self.ax.set_xlabel("Time (s)", color='white')
-        self.ax.set_ylabel("Players", color='white')
-        self.ax.grid(True, color='#4a4a4a')
-        self.ax.set_facecolor('#2e2e2e')
-        self.ax.tick_params(colors='white')
-
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.graph_frame)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-        # Info panel setup
-        self.status_frame = ttk.Frame(self.info_frame)
-        self.status_frame.pack(fill=tk.X, pady=(0, 10))
-
-        # Main server status indicator
-        self.main_server_status = ttk.Label(
-            self.status_frame, 
-            text="Main: Offline", 
-            foreground="red",
-            font=('Helvetica', 9, 'bold')
-        )
-        self.main_server_status.pack(side=tk.LEFT, padx=5)
-
-        # SourceTV status indicator
-        self.source_tv_status = ttk.Label(
-            self.status_frame, 
-            text="SourceTV: Offline", 
-            foreground="red",
-            font=('Helvetica', 9, 'bold')
-        )
-        self.source_tv_status.pack(side=tk.LEFT, padx=5)
-
-        self.map_label = ttk.Label(self.info_frame, text="Map: Unknown", font=('Helvetica', 10, 'bold'))
-        self.map_label.pack(pady=(0, 10))
-
-        self.player_count_label = ttk.Label(self.info_frame, text="Players: 0/0", font=('Helvetica', 10))
-        self.player_count_label.pack(pady=(0, 10))
-
-        self.player_list_label = ttk.Label(self.info_frame, text="Online Players:", font=('Helvetica', 10, 'bold'))
-        self.player_list_label.pack(anchor='w')
-
-        self.player_listbox = tk.Listbox(
-            self.info_frame,
-            bg='#3e3e3e',
-            fg='white',
-            selectbackground='#4e79a7',
-            selectforeground='white',
-            relief=tk.FLAT,
-            font=('Helvetica', 9)
-        )
-        self.player_listbox.pack(fill=tk.BOTH, expand=True)
-
-        self.thread = threading.Thread(target=self.update_loop, daemon=True)
-        self.thread.start()
-
-    def check_server_status(self, ip, port):
-        try:
-            a2s.info((ip, port), timeout=2)
-            return True
-        except:
-            return False
-
-    def query_server(self):
-        # Check server statuses
-        self.main_server_online = self.check_server_status(self.ip, self.port)
-        self.source_tv_online = self.check_server_status(self.ip, self.source_tv_port)
-        
-        # Update status indicators
-        self.frame.after(0, self.update_status_indicators)
-
-        # Try to get data from online servers
-        if self.main_server_online:
-            try:
-                info = a2s.info((self.ip, self.port), timeout=2)
-                players = a2s.players((self.ip, self.port), timeout=2)
-                return info.player_count, info.map_name, players
-            except Exception as e:
-                print(f"[{self.ip}:{self.port}] Main server query failed: {e}")
-        
-        if self.source_tv_online:
-            try:
-                stv_info = a2s.info((self.ip, self.source_tv_port), timeout=2)
-                stv_players = a2s.players((self.ip, self.source_tv_port), timeout=2)
-                return stv_info.player_count, stv_info.map_name, stv_players
-            except Exception as stv_e:
-                print(f"[{self.ip}:{self.source_tv_port}] SourceTV query failed: {stv_e}")
-        
-        return None, None, None
-
-    def update_status_indicators(self):
-        # Update main server status
-        if self.main_server_online:
-            self.main_server_status.config(text="Main: Online", foreground="green")
-        else:
-            self.main_server_status.config(text="Main: Offline", foreground="red")
-
-        # Update SourceTV status
-        if self.source_tv_online:
-            self.source_tv_status.config(text="SourceTV: Online", foreground="green")
-        else:
-            self.source_tv_status.config(text="SourceTV: Offline", foreground="red")
-
-    def update_loop(self):
-        while self.running:
-            count, map_name, players = self.query_server()
-            current_time = time.time() - self.start_time
-            
-            if count is not None and map_name is not None:
-                with self.lock:
-                    self.times.append(current_time)
-                    self.data.append(count)
-                    self.current_map = map_name
-                    self.players = players if players else []
-                
-                self.frame.after(0, self.update_display)
-            
-            time.sleep(5)
-
-    def update_display(self):
-        with self.lock:
-            times = self.times.copy()
-            data = self.data.copy()
-            map_name = self.current_map
-            players = self.players.copy()
-        
-        # Update the graph
-        self.ax.clear()
-        if times and data:
-            self.ax.plot(times, data, marker='o', color='#4e79a7')
-            self.ax.set_title("Players on CGE7-193", color='white')
-            self.ax.set_xlabel("Time (s)", color='white')
-            self.ax.set_ylabel("Players", color='white')
-            self.ax.grid(True, color='#4a4a4a')
-            self.ax.set_facecolor('#2e2e2e')
-            self.ax.tick_params(colors='white')
-            self.canvas.draw()
-
-        # Update the info panel
-        self.map_label.config(text=f"Map: {map_name}")
-        
-        player_count = len(players)
-        max_players = 24  # Default TF2 max players, adjust if needed
-        self.player_count_label.config(text=f"Players: {player_count}/{max_players}")
-        
-        self.player_listbox.delete(0, tk.END)
-        for player in players:
-            name = player.name if player.name else "Unknown"
-            self.player_listbox.insert(tk.END, name)
-
-    def close(self):
-        """Clean up resources when tab is closed"""
-        self.running = False
-        if self.thread.is_alive():
-            self.thread.join(timeout=1)
-        plt.close(self.fig)
-
-
-class TF2MonitorApp:
+class ServerMonitorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Reployer")
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.root.title("Reployer v0.3")
         
-        # Apply dark theme to the main window
-        self.root.configure(bg='#2e2e2e')
+        # Initialize data structures
+        self.timestamps = deque(maxlen=MAX_DATA_POINTS)
+        self.player_counts = deque(maxlen=MAX_DATA_POINTS)
+        self.player_list = []
+        self.server_info = None
+        self.current_map = None
         
-        # Create style for dark theme
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
+        # Setup application
+        self.setup_theme()
+        self.init_csv()
+        self.load_existing_data()
+        self.create_widgets()
         
-        # Configure colors
-        self.style.configure('.', background='#2e2e2e', foreground='white')
-        self.style.configure('TNotebook', background='#2e2e2e', borderwidth=0)
-        self.style.configure('TNotebook.Tab', background='#3e3e3e', foreground='white', 
-                           padding=[10, 5], borderwidth=0)
-        self.style.map('TNotebook.Tab', background=[('selected', '#4e4e4e')])
-        self.style.configure('TFrame', background='#2e2e2e')
-        self.style.configure('TLabel', background='#2e2e2e', foreground='white')
+        # Start monitoring
+        self.running = True
+        self.start_monitoring()
+        self.test_connection()
+        self.play_sound("open.wav")
+    
+    def setup_theme(self):
+        """Configure theme colors for dark mode"""
+        self.theme = {
+            'bg': "#2d2d2d", 'fg': "#ffffff", 'frame': "#3d3d3d",
+            'graph_bg': "#1e1e1e", 'graph_fg': "#ffffff", 'graph_grid': "#4d4d4d",
+            'plot': "#4fc3f7", 'listbox_bg': "#3d3d3d", 'listbox_fg': "#ffffff",
+            'select_bg': "#4fc3f7", 'select_fg': "#ffffff"
+        }
+        self.apply_theme()
+    
+    def apply_theme(self):
+        """Apply theme to all widgets"""
+        style = ttk.Style()
+        style.theme_use('clam')
         
-        self.server_tabs = []
-
-        self.notebook = ttk.Notebook(root)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Add controls frame
-        self.controls_frame = ttk.Frame(root)
-        self.controls_frame.pack(fill=tk.X, padx=10, pady=5)
-
-        # Add server input fields
-        self.ip_label = ttk.Label(self.controls_frame, text="Server IP:")
-        self.ip_label.pack(side=tk.LEFT, padx=5)
+        # Configure styles
+        style.configure('.', background=self.theme['bg'], foreground=self.theme['fg'])
+        style.configure('TFrame', background=self.theme['bg'])
+        style.configure('TLabel', background=self.theme['bg'], foreground=self.theme['fg'])
+        style.configure('TLabelframe', background=self.theme['bg'], foreground=self.theme['fg'])
+        style.configure('TLabelframe.Label', background=self.theme['bg'], foreground=self.theme['fg'])
         
-        self.ip_entry = ttk.Entry(self.controls_frame, width=15)
-        self.ip_entry.pack(side=tk.LEFT, padx=5)
-        self.ip_entry.insert(0, "79.127.217.197")
+        # Apply to root window
+        self.root.configure(bg=self.theme['bg'])
         
-        self.port_label = ttk.Label(self.controls_frame, text="Port:")
-        self.port_label.pack(side=tk.LEFT, padx=5)
+        # Apply to existing widgets
+        if hasattr(self, 'fig'):
+            self.update_graph_theme()
+        if hasattr(self, 'player_listbox'):
+            self.player_listbox.config(
+                bg=self.theme['listbox_bg'], fg=self.theme['listbox_fg'],
+                selectbackground=self.theme['select_bg'], selectforeground=self.theme['select_fg']
+            )
+    
+    def create_widgets(self):
+        """Create all GUI widgets"""
+        # Server Information Frame
+        self.create_server_info_frame()
         
-        self.port_entry = ttk.Entry(self.controls_frame, width=6)
-        self.port_entry.pack(side=tk.LEFT, padx=5)
-        self.port_entry.insert(0, "22912")
+        # Player List Frame
+        self.create_player_list_frame()
         
-        self.add_button = ttk.Button(self.controls_frame, text="Add Server", command=self.add_server_from_input)
-        self.add_button.pack(side=tk.LEFT, padx=5)
-
-        # Add the predefined server tab
-        self.add_server_tab("79.127.217.197", 22912)
-
-    def add_server_from_input(self):
-        ip = self.ip_entry.get()
-        port = self.port_entry.get()
+        # Graph Frame
+        self.create_graph_frame()
+        
+        # Action Buttons Frame
+        self.create_action_buttons()
+        
+        # Status Bars
+        self.create_status_bars()
+        
+        # Debug Info
+        debug_frame = ttk.Frame(self.root)
+        debug_frame.pack(fill=tk.X, padx=10, pady=5)
+        ttk.Label(debug_frame, text=f"Server: {SERVER_ADDRESS[0]}:{SERVER_ADDRESS[1]}").pack(side=tk.RIGHT)
+    
+    def create_action_buttons(self):
+        """Create buttons for TF2 actions"""
+        button_frame = ttk.Frame(self.root)
+        button_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Button for connecting to 2fort
+        self.twofort_button = ttk.Button(
+            button_frame, 
+            text="Connect to 2fort", 
+            command=self.connect_to_2fort,
+            state=tk.DISABLED
+        )
+        self.twofort_button.pack(side=tk.LEFT, padx=5)
+        
+        # Button for connecting to the main server
+        self.main_server_button = ttk.Button(
+            button_frame, 
+            text="Connect to Main Server", 
+            command=self.connect_to_main_server,
+            state=tk.DISABLED
+        )
+        self.main_server_button.pack(side=tk.LEFT, padx=5)
+    
+    def connect_to_2fort(self):
+        """Launch TF2 and connect to 2fort server"""
+        self.launch_tf2_with_connect("connect 79.127.217.197:22913")
+    
+    def connect_to_main_server(self):
+        """Launch TF2 and connect to main server"""
+        self.launch_tf2_with_connect("connect 79.127.217.197:22913")
+    
+    def launch_tf2_with_connect(self, connect_command):
+        """Launch TF2 with a connect command"""
         try:
-            port = int(port)
-            self.add_server_tab(ip, port)
-        except ValueError:
-            tk.messagebox.showerror("Error", "Port must be a number")
-
-    def add_server_tab(self, ip, port):
-        try:
-            tab = ServerTab(self.notebook, ip, port)
-            self.server_tabs.append(tab)
-            self.notebook.select(tab.frame)  # Focus on the new tab
+            # On Windows
+            if os.name == 'nt':
+                subprocess.Popen(f'start steam://rungameid/440//+{connect_command}', shell=True)
+            # On Linux/Mac
+            else:
+                subprocess.Popen(['steam', '-applaunch', '440', f'+{connect_command}'])
         except Exception as e:
-            tk.messagebox.showerror("Error", f"Failed to monitor server: {e}")
+            self.status_var.set(f"Error launching TF2: {str(e)}")
+    
+    def create_server_info_frame(self):
+        """Create server information display frame"""
+        info_frame = ttk.LabelFrame(self.root, text="Server Information", padding=10)
+        info_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.server_name_label = ttk.Label(info_frame, text="Server Name: Testing connection...")
+        self.server_name_label.pack(anchor=tk.W)
+        
+        self.server_map_label = ttk.Label(info_frame, text="Current Map: Unknown")
+        self.server_map_label.pack(anchor=tk.W)
+        
+        self.player_count_label = ttk.Label(info_frame, text="Players: ?/?")
+        self.player_count_label.pack(anchor=tk.W)
+    
+    def create_player_list_frame(self):
+        """Create online players list frame"""
+        player_frame = ttk.LabelFrame(self.root, text="Online Players", padding=10)
+        player_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.player_listbox = tk.Listbox(
+            player_frame, 
+            bg=self.theme['listbox_bg'], fg=self.theme['listbox_fg'],
+            selectbackground=self.theme['select_bg'], selectforeground=self.theme['select_fg']
+        )
+        self.player_listbox.pack(fill=tk.BOTH, expand=True)
+    
+    def create_graph_frame(self):
+        """Create player count history graph frame"""
+        graph_frame = ttk.LabelFrame(self.root, text="Player Count History", padding=10)
+        graph_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        self.fig = Figure(figsize=(8, 4), dpi=100)
+        self.ax = self.fig.add_subplot(111)
+        self.update_graph_theme()
+        
+        self.canvas = FigureCanvasTkAgg(self.fig, master=graph_frame)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    
+    def create_status_bars(self):
+        """Create status and ordinance time bars"""
+        self.status_var = tk.StringVar(value="Initializing...")
+        status_bar = ttk.Label(
+            self.root, textvariable=self.status_var, 
+            relief=tk.SUNKEN, anchor=tk.CENTER
+        )
+        status_bar.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.ordinance_var = tk.StringVar(value="Calculating time since ordinance start...")
+        ordinance_bar = ttk.Label(
+            self.root, textvariable=self.ordinance_var,
+            relief=tk.SUNKEN, anchor=tk.CENTER
+        )
+        ordinance_bar.pack(fill=tk.X, padx=10, pady=(0, 5))
+    
+    def update_graph_theme(self):
+        """Update graph colors based on theme"""
+        if hasattr(self, 'fig'):
+            self.fig.set_facecolor(self.theme['graph_bg'])
+            self.ax.set_facecolor(self.theme['graph_bg'])
+            self.ax.tick_params(colors=self.theme['graph_fg'])
+            self.ax.xaxis.label.set_color(self.theme['graph_fg'])
+            self.ax.yaxis.label.set_color(self.theme['graph_fg'])
+            self.ax.title.set_color(self.theme['graph_fg'])
+            self.ax.grid(True, color=self.theme['graph_grid'])
+    
+    def init_csv(self):
+        """Initialize CSV file with headers if it doesn't exist"""
+        if not os.path.exists(CSV_FILENAME):
+            with open(CSV_FILENAME, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['UTC Timestamp', 'Player Count', 'Map', 'Players Online'])
+    
+    def log_to_csv(self, timestamp, player_count, map_name, players):
+        """Log data to CSV file"""
+        try:
+            with open(CSV_FILENAME, 'a', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                player_names = ", ".join([player.name for player in players]) if players else "None"
+                writer.writerow([timestamp, player_count, map_name, player_names])
+        except IOError as e:
+            print(f"Error writing to CSV: {e}")
+    
+    def load_existing_data(self):
+        """Load existing data from CSV file to populate the graph"""
+        if not os.path.exists(CSV_FILENAME):
+            return
+        
+        try:
+            with open(CSV_FILENAME, 'r', newline='', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                rows = list(reader)
+                
+                for row in rows[-MAX_DATA_POINTS:]:
+                    try:
+                        dt = datetime.fromisoformat(row['UTC Timestamp'].replace('Z', '+00:00'))
+                        time_str = dt.strftime('%H:%M:%S')
+                        player_count = int(row['Player Count'])
+                        
+                        self.timestamps.append(time_str)
+                        self.player_counts.append(player_count)
+                    except (KeyError, ValueError):
+                        continue
+        except Exception as e:
+            print(f"Error loading existing data: {e}")
+    
+    def test_connection(self):
+        """Test if we can reach the server"""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.settimeout(TIMEOUT)
+                sock.connect(SERVER_ADDRESS)
+                sock.send(b'\xFF\xFF\xFF\xFFTSource Engine Query\x00')
+                sock.recv(1400)
+            self.status_var.set("Connection test successful")
+            return True
+        except Exception as e:
+            self.status_var.set(f"Connection failed: {str(e)}")
+            return False
+    
+    def get_server_info(self):
+        """Try to get server info with multiple fallback methods"""
+        if not A2S_AVAILABLE:
+            return None, 0, []
+        
+        try:
+            info = a2s_info(SERVER_ADDRESS, timeout=TIMEOUT)
+            players = a2s_players(SERVER_ADDRESS, timeout=TIMEOUT)
+            return info, len(players), players
+        except Exception as e:
+            self.status_var.set(f"A2S Error: {str(e)}")
+            return None, 0, []
+    
+    def start_monitoring(self):
+        """Start the update thread"""
+        self.update_thread = threading.Thread(target=self.update_loop, daemon=True)
+        self.update_thread.start()
+    
+    def update_loop(self):
+        """Main update loop running in a separate thread"""
+        while self.running:
+            try:
+                self.update_server_info()
+            except Exception as e:
+                print(f"Error in update loop: {e}")
+            time.sleep(UPDATE_INTERVAL)
+    
+    def update_server_info(self):
+        """Update all server information displays"""
+        info, player_count, players = self.get_server_info()
+        self.player_list = players
+        
+        # Update server info display
+        current_map = self.update_server_display(info, player_count)
+        
+        # Update player list
+        self.update_player_list(players)
+        
+        # Log data and update graph
+        self.log_and_update_graph(current_map, player_count, players)
+        
+        # Update ordinance time
+        self.update_ordinance_time()
+        
+        # Update status with current time
+        current_time = datetime.now(timezone.utc).strftime('%H:%M:%S')
+        self.status_var.set(f"Last update (UTC): {current_time}")
+    
+    def update_server_display(self, info, player_count):
+        """Update server information display"""
+        current_map = "Unknown"
+        
+        if info:
+            self.server_name_label.config(text=f"Server Name: {info.server_name}")
+            self.server_map_label.config(text=f"Current Map: {info.map_name}")
+            self.player_count_label.config(text=f"Players: {player_count}/{info.max_players}")
+            current_map = info.map_name
+            self.check_map_change(current_map)
+            
+            # Update button states based on current map
+            self.update_button_states(current_map)
+        else:
+            self.server_name_label.config(text="Server Name: Unknown")
+            self.server_map_label.config(text="Current Map: Unknown")
+            self.player_count_label.config(text="Players: ?/?")
+            # Disable both buttons if no server info
+            self.twofort_button.config(state=tk.DISABLED)
+            self.main_server_button.config(state=tk.DISABLED)
+        
+        return current_map
+    
+    def update_button_states(self, current_map):
+        """Update the enabled/disabled state of the action buttons"""
+        # Enable 2fort button only if map is "2fort"
+        if current_map.lower() == "2fort":
+            self.twofort_button.config(state=tk.NORMAL)
+        else:
+            self.twofort_button.config(state=tk.DISABLED)
+        
+        # Enable main server button only if map is not in the excluded list
+        excluded_maps = ["mazemazemazemaze", "kurt", "ask", "askask"]
+        if current_map.lower() not in [m.lower() for m in excluded_maps]:
+            self.main_server_button.config(state=tk.NORMAL)
+        else:
+            self.main_server_button.config(state=tk.DISABLED)
+    
+    def update_player_list(self, players):
+        """Update the player listbox with current players"""
+        self.player_listbox.delete(0, tk.END)
+        
+        if not players:
+            self.player_listbox.insert(tk.END, "No players online")
+            return
+        
+        for player in players:
+            playtime = ""
+            if player.duration > 0:
+                hours = int(player.duration // 3600)
+                minutes = int((player.duration % 3600) // 60)
+                playtime = f" ({hours}h {minutes}m)"
+            
+            self.player_listbox.insert(tk.END, f"{player.name}{playtime}")
+    
+    def log_and_update_graph(self, current_map, player_count, players):
+        """Log data and update the graph"""
+        current_time = datetime.now(timezone.utc).strftime('%H:%M:%S')
+        self.timestamps.append(current_time)
+        self.player_counts.append(player_count)
+        
+        self.log_to_csv(
+            datetime.now(timezone.utc).isoformat(),
+            player_count,
+            current_map,
+            players
+        )
+        
+        self.update_graph()
+    
+    def update_graph(self):
+        """Update the player count graph"""
+        if not self.timestamps:
+            return
+            
+        self.ax.clear()
+        
+        # Show only every nth label to prevent overcrowding
+        n = max(1, len(self.timestamps) // 10)
+        visible_ticks = [tick if i % n == 0 else "" for i, tick in enumerate(self.timestamps)]
+        
+        self.ax.plot(
+            self.timestamps, 
+            self.player_counts, 
+            color=self.theme['plot'], 
+            marker='o'
+        )
+        self.ax.set_xticks(self.timestamps)
+        self.ax.set_xticklabels(visible_ticks, rotation=45)
+        
+        # Set y-axis limits with some padding
+        y_max = max(self.player_counts) + 1 if self.player_counts else 10
+        self.ax.set_ylim(bottom=0, top=y_max)
+        
+        self.ax.set_title(
+            f'Online Players - {SERVER_ADDRESS[0]}:{SERVER_ADDRESS[1]}',
+            color=self.theme['graph_fg']
+        )
+        
+        self.update_graph_theme()
+        self.canvas.draw()
+    
+    def update_ordinance_time(self):
+        """Calculate and display time since ordinance start"""
+        current_utc = datetime.now(timezone.utc)
+        time_diff = current_utc - ORDINANCE_START
+        
+        days = time_diff.days
+        hours, remainder = divmod(time_diff.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        self.ordinance_var.set(
+            f"Time since start of ordinance: {days} days, {hours:02d}:{minutes:02d}:{seconds:02d}"
+        )
+    
+    def play_sound(self, sound_file):
+        """Play a sound file from the resources folder"""
+        if not PYGAME_AVAILABLE:
+            return
+        
+        try:
+            sound_path = os.path.join("resources", sound_file)
+            if os.path.exists(sound_path):
+                sound = pygame.mixer.Sound(sound_path)
+                sound.play()
+            else:
+                print(f"Sound file not found: {sound_path}")
+        except Exception as e:
+            print(f"Error playing sound {sound_file}: {e}")
 
+    def check_map_change(self, new_map):
+        """Check if map has changed and play appropriate sound"""
+        if self.current_map is not None and self.current_map != new_map:
+            if new_map == "ordinance":
+                self.play_sound("ordinance.wav")
+            elif new_map.startswith("ord_"):
+                if new_map == "ord_cry":
+                    self.play_sound("ord_cry.wav")
+                elif new_map == "ord_err":
+                    self.play_sound("ord_err.wav")
+                elif new_map == "ord_ren":
+                    self.play_sound("ord_ren.wav")
+                else:
+                    self.play_sound("ord_mapchange.wav")
+        
+        self.current_map = new_map
+    
     def on_close(self):
-        """Clean up all server tabs before closing"""
-        for tab in self.server_tabs:
-            tab.close()
+        """Clean up resources when closing the application"""
+        self.play_sound("close.wav")
+        
+        if PYGAME_AVAILABLE:
+            time.sleep(0.5)
+        
+        self.running = False
+        if self.update_thread.is_alive():
+            self.update_thread.join(timeout=1)
         self.root.destroy()
-
 
 if __name__ == "__main__":
     root = tk.Tk()
-    try:
-        app = TF2MonitorApp(root)
-        root.mainloop()
-    except Exception as e:
-        tk.messagebox.showerror("Fatal Error", f"Application crashed: {e}")
+    app = ServerMonitorApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
+    root.mainloop()
