@@ -62,6 +62,8 @@ class ServerMonitorApp:
         self.map_sound_played = {}
         self.sound_played_minute = None
         self.last_time_sound_minute = None
+        
+        # Views monitoring
         self.current_views = 0
         self.last_view_id = None
         self.websocket_running = True
@@ -78,7 +80,6 @@ class ServerMonitorApp:
         self.start_websocket_monitor()
         self.test_connection()
         self.play_sound("open.wav")
-    
         
         # Start map cycle updates
         self.update_map_display()
