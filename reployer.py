@@ -48,7 +48,8 @@ except ImportError:
 class ServerMonitorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Reployer v1.0")
+        self.root.title("Reployer v1.1")
+        self.root.geometry("1500x900")
         
         # Initialize data structures
         self.timestamps = deque(maxlen=MAX_DATA_POINTS)
@@ -145,17 +146,29 @@ class ServerMonitorApp:
 
     def create_widgets(self):
         """Create all GUI widgets"""
+        # Main container frame for left and right sections
+        main_container = ttk.Frame(self.root)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Left frame for server info, views, and player list
+        left_frame = ttk.Frame(main_container)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Right frame for the graph
+        right_frame = ttk.Frame(main_container)
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        
         # Server Information Frame (now includes map cycle info)
-        self.create_server_info_frame()
+        self.create_server_info_frame(left_frame)
         
         # Views Counter Frame
-        self.create_views_frame()
+        self.create_views_frame(left_frame)
         
         # Player List Frame
-        self.create_player_list_frame()
+        self.create_player_list_frame(left_frame)
         
         # Graph Frame
-        self.create_graph_frame()
+        self.create_graph_frame(right_frame)
         
         # Action Buttons Frame
         self.create_action_buttons()
@@ -168,10 +181,10 @@ class ServerMonitorApp:
         debug_frame.pack(fill=tk.X, padx=10, pady=5)
         ttk.Label(debug_frame, text=f"Server: {CGE7_193[0]}:{CGE7_193[1]}").pack(side=tk.RIGHT)
 
-    def create_views_frame(self):
+    def create_views_frame(self, parent):
         """Create views counter display frame"""
-        views_frame = ttk.LabelFrame(self.root, text="Website Views Monitor", padding=10)
-        views_frame.pack(fill=tk.X, padx=10, pady=5)
+        views_frame = ttk.LabelFrame(parent, text="Website Views Monitor", padding=10)
+        views_frame.pack(fill=tk.X, padx=5, pady=5)
         
         self.views_label = tk.Label(
             views_frame,
@@ -192,10 +205,10 @@ class ServerMonitorApp:
         self.views_status = ttk.Label(views_frame, text="Status: Connecting to WebSocket...")
         self.views_status.pack(anchor=tk.W)
 
-    def create_server_info_frame(self):
+    def create_server_info_frame(self, parent):
         """Create server information display frame with integrated map cycle info"""
-        info_frame = ttk.LabelFrame(self.root, text="Server Information", padding=10)
-        info_frame.pack(fill=tk.X, padx=10, pady=5)
+        info_frame = ttk.LabelFrame(parent, text="CGE7-193 Information", padding=10)
+        info_frame.pack(fill=tk.X, padx=5, pady=5)
         
         # Server info section
         self.server_name_label = ttk.Label(info_frame, text="Server Name: Testing connection...")
@@ -206,9 +219,6 @@ class ServerMonitorApp:
         
         self.player_count_label = ttk.Label(info_frame, text="Players: ?/?")
         self.player_count_label.pack(anchor=tk.W)
-        
-        self.query_status_label = ttk.Label(info_frame, text="Query Status: Initializing...")
-        self.query_status_label.pack(anchor=tk.W)
         
         # Separator
         ttk.Separator(info_frame, orient='horizontal').pack(fill=tk.X, pady=5)
@@ -351,10 +361,10 @@ class ServerMonitorApp:
             elif current_minute not in minute_sounds:
                 self.last_time_sound_minute = None
 
-    def create_player_list_frame(self):
+    def create_player_list_frame(self, parent):
         """Create online players list frame"""
-        player_frame = ttk.LabelFrame(self.root, text="Online Players", padding=10)
-        player_frame.pack(fill=tk.X, padx=10, pady=5)
+        player_frame = ttk.LabelFrame(parent, text="Online Players", padding=10)
+        player_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         self.player_listbox = tk.Listbox(
             player_frame, 
@@ -365,10 +375,10 @@ class ServerMonitorApp:
         )
         self.player_listbox.pack(fill=tk.BOTH, expand=True)
 
-    def create_graph_frame(self):
+    def create_graph_frame(self, parent):
         """Create player count history graph frame"""
-        graph_frame = ttk.LabelFrame(self.root, text="Player Count History", padding=10)
-        graph_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        graph_frame = ttk.LabelFrame(parent, text="Player Count History", padding=10)
+        graph_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         self.fig = Figure(figsize=(8, 4), dpi=100)
         self.ax = self.fig.add_subplot(111)
@@ -546,7 +556,6 @@ class ServerMonitorApp:
     def update_server_display(self, info, player_count, query_status):
         """Update server information display"""
         current_map = "Unknown"
-        self.query_status_label.config(text=f"Query Status: {query_status}")
         
         if info:
             self.server_name_label.config(text=f"Server Name: {info.server_name}")
