@@ -67,7 +67,7 @@ class ServerMonitorApp:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Reployer v2.2 - Made by Kiverix 'the clown'")
+        self.root.title("Reployer v2.5 - Made by Kiverix 'the clown'")
         self.root.geometry("1500x1000")
 
         # Add custom title bar
@@ -113,7 +113,7 @@ class ServerMonitorApp:
         self.title_bar.bind('<B1-Motion>', self.on_move)
 
         # App title
-        title_label = tk.Label(self.title_bar, text="Reployer v2.2 - With Love, by Kiverix", bg="#232323", fg="#4fc3f7", font=("Arial", 12, "bold"))
+        title_label = tk.Label(self.title_bar, text="Reployer v2.5 - With Love, by Kiverix", bg="#232323", fg="#4fc3f7", font=("Arial", 12, "bold"))
         title_label.pack(side=tk.LEFT, padx=10)
 
         # Close button (rightmost)
@@ -717,11 +717,11 @@ class ServerMonitorApp:
         self.ax.set_xticks(self.timestamps)
         self.ax.set_xticklabels(visible_ticks, rotation=45)
         
-        y_max = max(self.player_counts) + 1 if self.player_counts else 10
-        self.ax.set_ylim(bottom=0, top=y_max)
-        
+        # Always show y-axis from 0 to 16 with 17 integer ticks
+        self.ax.set_ylim(0, 16)
+        self.ax.set_yticks(list(range(17)))
+        self.ax.yaxis.set_major_formatter(lambda x, pos: f"{int(x)}")
         self.ax.set_title(f'Online Players - {CGE7_193[0]}:{CGE7_193[1]}', color=self.theme['graph_fg'])
-        
         self.update_graph_theme()
         self.canvas.draw()
 
@@ -884,14 +884,35 @@ def show_thank_you():
     except Exception:
         pass
 
-    # Display gaq9.png at the top
+    # Display gaq9.png and sourceclown.png side by side at the top, with sourceclown.png resized to match gaq9.png
     try:
         from tkinter import PhotoImage
-        img_path = os.path.join("resources", "gaq9.png")
-        if os.path.exists(img_path):
-            splash.img = PhotoImage(file=img_path)
-            img_label = tk.Label(splash, image=splash.img, bg="#2d2d2d")
-            img_label.pack(side=tk.TOP, pady=(10, 0))
+        img_frame = tk.Frame(splash, bg="#2d2d2d")
+        img_frame.pack(side=tk.TOP, pady=(10, 0))
+        gaq9_path = os.path.join("resources", "gaq9.png")
+        sourceclown_path = os.path.join("resources", "sourceclown.png")
+        gaq9_img = None
+        sourceclown_img = None
+        if os.path.exists(gaq9_path):
+            splash.gaq9_img = PhotoImage(file=gaq9_path)
+            gaq9_img = splash.gaq9_img
+            gaq9_label = tk.Label(img_frame, image=gaq9_img, bg="#2d2d2d")
+            gaq9_label.pack(side=tk.LEFT, padx=(0, 10))
+        if os.path.exists(sourceclown_path) and gaq9_img is not None:
+            try:
+                from PIL import Image, ImageTk
+                gaq9_pil = Image.open(gaq9_path)
+                sourceclown_pil = Image.open(sourceclown_path)
+                # Resize sourceclown.png to match gaq9.png size
+                sourceclown_pil = sourceclown_pil.resize(gaq9_pil.size, Image.LANCZOS)
+                splash.sourceclown_img = ImageTk.PhotoImage(sourceclown_pil)
+                sourceclown_img = splash.sourceclown_img
+            except Exception:
+                # Fallback: show original size if PIL not available
+                splash.sourceclown_img = PhotoImage(file=sourceclown_path)
+                sourceclown_img = splash.sourceclown_img
+            sourceclown_label = tk.Label(img_frame, image=sourceclown_img, bg="#2d2d2d")
+            sourceclown_label.pack(side=tk.LEFT)
     except Exception:
         pass
 
@@ -912,7 +933,7 @@ def show_thank_you():
             splash.after(200, animate_loading, count + 1)
 
     animate_loading()
-    splash.after(3500, splash.destroy)
+    splash.after(5000, splash.destroy)
     splash.mainloop()
 
 if __name__ == "__main__":
