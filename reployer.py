@@ -864,6 +864,13 @@ def show_thank_you():
     splash.title("Welcome to Reployer")
     splash.configure(bg="#2d2d2d")
     splash.overrideredirect(True)  # Remove window top bar
+    # Set splash icon to sourceclown.ico
+    try:
+        icon_path = os.path.join("resources", "sourceclown.ico")
+        if os.path.exists(icon_path):
+            splash.iconbitmap(icon_path)
+    except Exception:
+        pass
     center_window(splash, 500, 375)
 
     # Play a random preopenX.mp3 sound at 50% volume
@@ -939,6 +946,13 @@ def show_thank_you():
 if __name__ == "__main__":
     show_thank_you()
     root = tk.Tk()
+    # Set main app icon to sourceclown.ico
+    try:
+        icon_path = os.path.join("resources", "sourceclown.ico")
+        if os.path.exists(icon_path):
+            root.iconbitmap(icon_path)
+    except Exception:
+        pass
     center_window(root, 1500, 1000)
     app = ServerMonitorApp(root)
     root.protocol("WM_DELETE_WINDOW", app.on_close)
