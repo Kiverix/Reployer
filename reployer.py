@@ -15,6 +15,7 @@ import asyncio
 import json
 import webbrowser
 
+# Constants
 CGE7_193 = ('79.127.217.197', 22912)
 TIMEOUT = 5
 CSV_FILENAME = "player_log.csv"
@@ -23,6 +24,7 @@ MAX_DATA_POINTS = 60
 UPDATE_INTERVAL = 5
 VIEWS_WEBSOCKET_URL = "wss://view.gaq9.com"
 
+# Sound and server query modules
 try:
     import pygame
     pygame.mixer.init()
@@ -37,6 +39,7 @@ try:
 except ImportError:
     A2S_AVAILABLE = False
 
+# Main application class
 class ServerMonitorApp:
     def play_hover_sound(self, event=None):
         if not PYGAME_AVAILABLE:
@@ -50,7 +53,7 @@ class ServerMonitorApp:
         except Exception:
             pass
     def get_server_info(self):
-        """Get server info using A2S"""
+        # Query server info
         if not A2S_AVAILABLE:
             return None, 0, []
         try:
@@ -61,7 +64,7 @@ class ServerMonitorApp:
             return None, 0, []
 
     def start_monitoring(self):
-        """Start monitoring thread"""
+        # Start server monitoring thread
         self.update_thread = threading.Thread(target=self.update_loop, daemon=True)
         self.update_thread.start()
 
@@ -70,8 +73,7 @@ class ServerMonitorApp:
         self.root.title("Reployer v2.5 - Made by Kiverix 'the clown'")
         self.root.geometry("1500x1000")
 
-        # Add custom title bar
-        self.create_custom_title_bar()
+        self.create_custom_title_bar()  # Custom title bar
 
         # Data structures
         self.timestamps = deque(maxlen=MAX_DATA_POINTS)
@@ -80,7 +82,7 @@ class ServerMonitorApp:
         self.server_info = None
         self.current_map = None
 
-        # Map cycle vars
+        # Map cycle variables
         self.last_map_name = None
         self.map_sound_played = {}
         self.sound_played_minute = None
@@ -91,13 +93,12 @@ class ServerMonitorApp:
         self.last_view_id = None
         self.websocket_running = True
 
-        # Setup app
-        self.setup_theme()
-        self.init_csv()
-        self.load_existing_data()
-        self.create_widgets()
+        self.setup_theme()  # Theme
+        self.init_csv()     # CSV file
+        self.load_existing_data()  # Load data
+        self.create_widgets()      # GUI widgets
 
-        # Start monitoring
+        # Start background tasks
         self.running = True
         self.start_monitoring()
         self.start_websocket_monitor()
@@ -106,7 +107,7 @@ class ServerMonitorApp:
         self.update_map_display()
 
     def create_custom_title_bar(self):
-        """Create a custom title bar with close and minimize buttons"""
+        # Custom title bar with close and minimize buttons
         self.title_bar = tk.Frame(self.root, bg="#232323", relief=tk.RAISED, bd=0, height=32)
         self.title_bar.pack(fill=tk.X, side=tk.TOP)
         self.title_bar.bind('<Button-1>', self.start_move)
@@ -133,7 +134,7 @@ class ServerMonitorApp:
         minimize_btn.bind('<Enter>', self.play_hover_sound)
 
     def minimize_window(self):
-        """Minimize the main window"""
+        # Minimize main window
         self.root.update_idletasks()
         self.root.iconify()
 
@@ -147,7 +148,7 @@ class ServerMonitorApp:
         self.root.geometry(f"+{x}+{y}")
 
     def setup_theme(self):
-        """Configure dark theme"""
+        # Configure dark theme
         self.theme = {
             'bg': "#2d2d2d", 'fg': "#ffffff", 'frame': "#3d3d3d",
             'graph_bg': "#1e1e1e", 'graph_fg': "#ffffff", 'graph_grid': "#4d4d4d",
@@ -160,7 +161,7 @@ class ServerMonitorApp:
         self.apply_theme()
 
     def apply_theme(self):
-        """Apply theme to widgets"""
+        # Apply theme to widgets
         style = ttk.Style()
         style.theme_use('clam')
         style.configure('.', background=self.theme['bg'], foreground=self.theme['fg'])
@@ -183,7 +184,7 @@ class ServerMonitorApp:
             self.views_label.config(bg=self.theme['views_bg'], fg=self.theme['views_fg'])
 
     def create_widgets(self):
-        """Create all GUI widgets"""
+        # Create all GUI widgets
         main_container = ttk.Frame(self.root)
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
@@ -234,7 +235,7 @@ class ServerMonitorApp:
         self.youtube_label.bind("<Button-1>", open_youtube)
 
     def create_views_frame(self, parent):
-        """Create views counter frame"""
+        # Views counter frame
         views_frame = ttk.LabelFrame(parent, text="CGE7-193 Diet View Monitor (no new views since July 24th sadly, it's joever)", padding=10)
         views_frame.pack(fill=tk.X, padx=5, pady=5)
         
@@ -258,7 +259,7 @@ class ServerMonitorApp:
         self.views_status.pack(anchor=tk.W)
 
     def create_server_info_frame(self, parent):
-        """Create server info frame"""
+        # Server info frame
         info_frame = ttk.LabelFrame(parent, text="CGE7-193 Information", padding=10)
         info_frame.pack(fill=tk.X, padx=5, pady=5)
         
@@ -310,7 +311,7 @@ class ServerMonitorApp:
         self.restart_status_label.pack(anchor=tk.W)
 
     def get_map_based_on_utc_hour(self, hour=None):
-        """Get map based on UTC hour"""
+        # Map schedule by UTC hour
         if hour is None:
             hour = datetime.utcnow().hour
 
@@ -325,7 +326,7 @@ class ServerMonitorApp:
         return map_schedule.get(hour, "unknown")
     
     def get_adjacent_maps(self):
-        """Get previous and next map"""
+        # Previous and next map
         current_hour = datetime.utcnow().hour
         current_minute = datetime.utcnow().minute
         current_second = datetime.utcnow().second
@@ -343,7 +344,7 @@ class ServerMonitorApp:
 
 
     def update_map_display(self):
-        """Update map and time display"""
+        # Update map and time display
         utc_now = datetime.utcnow()
         local_now = datetime.now()
 
@@ -400,7 +401,7 @@ class ServerMonitorApp:
         self.root.after(50, self.update_map_display)
 
     def handle_time_warning_sounds(self, utc_now):
-        """Handle time warning sounds"""
+        # Play warning sounds at specific times
         current_minute = utc_now.minute
         current_second = utc_now.second
         
@@ -414,7 +415,7 @@ class ServerMonitorApp:
                 self.last_time_sound_minute = None
 
     def create_player_list_frame(self, parent):
-        """Create player list frame"""
+        # Player list frame
         player_frame = ttk.LabelFrame(parent, text="Online Players", padding=10)
         player_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
@@ -428,7 +429,7 @@ class ServerMonitorApp:
         self.player_listbox.pack(fill=tk.BOTH, expand=True)
 
     def create_graph_frame(self, parent):
-        """Create player count graph"""
+        # Player count graph
         graph_frame = ttk.LabelFrame(parent, text="Player Count History", padding=10)
         graph_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
@@ -440,7 +441,7 @@ class ServerMonitorApp:
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
     def update_graph_theme(self):
-        """Update graph colors"""
+        # Update graph colors
         self.fig.set_facecolor(self.theme['graph_bg'])
         self.ax.set_facecolor(self.theme['graph_bg'])
         self.ax.tick_params(colors=self.theme['graph_fg'])
@@ -450,7 +451,7 @@ class ServerMonitorApp:
         self.ax.grid(True, color=self.theme['graph_grid'])
 
     def create_action_buttons(self):
-        """Create action buttons"""
+        # Action buttons
         button_frame = ttk.Frame(self.root)
         button_frame.pack(fill=tk.X, padx=10, pady=5)
 
@@ -473,17 +474,17 @@ class ServerMonitorApp:
         self.sourceTV_button.bind('<Enter>', self.play_hover_sound)
 
     def connect_to_cge(self):
-        """Connect to CGE7-193 server"""
+        # Connect to CGE7-193 server
         self.play_sound("join.wav")
         self.launch_tf2_with_connect("connect 79.127.217.197:22912")
 
     def connect_to_sourceTV(self):
-        """Connect to SourceTV server"""
+        # Connect to SourceTV server
         self.play_sound("join.wav")
         self.launch_tf2_with_connect("connect 79.127.217.197:22913")
 
     def show_tf2_not_installed(self):
-        """Show a splash-like window indicating TF2 is not installed"""
+        # Show splash window if TF2 is not installed
         win = tk.Toplevel(self.root)
         win.title("TF2 is NOT installed")
         win.configure(bg="#2d2d2d")
@@ -500,7 +501,7 @@ class ServerMonitorApp:
         win.after(3000, win.destroy)
 
     def launch_tf2_with_connect(self, connect_command):
-        """Launch TF2 with connect command"""
+        # Launch TF2 with connect command
         try:
             server = connect_command.split(' ')[1]
             if os.name == 'nt':
@@ -518,7 +519,7 @@ class ServerMonitorApp:
             self.status_var.set(f"Error launching TF2: {str(e)}")
 
     def find_steam_executable(self):
-        """Find Steam.exe path on Windows"""
+        # Find Steam.exe path on Windows
         possible_paths = [
             os.path.join(os.environ.get('ProgramFiles(x86)', ''), 'Steam', 'Steam.exe'),
             os.path.join(os.environ.get('ProgramFiles', ''), 'Steam', 'Steam.exe'),
@@ -532,7 +533,7 @@ class ServerMonitorApp:
         return None
 
     def create_status_bars(self):
-        """Create status bars"""
+        # Status bars
         self.status_var = tk.StringVar(value="Initializing...")
         status_bar = ttk.Label(
             self.root, textvariable=self.status_var, 
@@ -548,14 +549,14 @@ class ServerMonitorApp:
         ordinance_bar.pack(fill=tk.X, padx=10, pady=(0, 5))
 
     def init_csv(self):
-        """Initialize CSV file"""
+        # Initialize CSV file
         if not os.path.exists(CSV_FILENAME):
             with open(CSV_FILENAME, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow(['UTC Timestamp', 'Player Count', 'Map', 'Players Online'])
 
     def log_to_csv(self, timestamp, player_count, map_name, players):
-        """Log data to CSV"""
+        # Log data to CSV
         try:
             with open(CSV_FILENAME, 'a', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
@@ -565,7 +566,7 @@ class ServerMonitorApp:
             pass
 
     def load_existing_data(self):
-        """Load existing data from CSV"""
+        # Load existing data from CSV
         if not os.path.exists(CSV_FILENAME):
             return
         
@@ -588,7 +589,7 @@ class ServerMonitorApp:
             pass
 
     def test_connection(self):
-        """Test server connection"""
+        # Test server connection
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
                 sock.settimeout(TIMEOUT)
@@ -602,7 +603,7 @@ class ServerMonitorApp:
             return False
 
     def update_server_info(self):
-        """Update server info"""
+        # Update server info
         info, player_count, players = self.get_server_info()
         
         if info is None:
@@ -629,7 +630,7 @@ class ServerMonitorApp:
         self.status_var.set(f"Last update (UTC): {current_time} | {query_status}")
 
     def update_loop(self):
-        """Main update loop"""
+        # Main update loop
         while self.running:
             try:
                 self.update_server_info()
@@ -638,7 +639,7 @@ class ServerMonitorApp:
             time.sleep(UPDATE_INTERVAL)
 
     def update_server_display(self, info, player_count, query_status):
-        """Update server display"""
+        # Update server display
         current_map = "Unknown"
         
         if info:
@@ -658,7 +659,7 @@ class ServerMonitorApp:
         return current_map
 
     def update_button_states(self, current_map):
-        """Update button states"""
+        # Update button states
         if current_map.lower() == "2fort":
             self.cge_button.config(state=tk.NORMAL)
         else:
@@ -671,7 +672,7 @@ class ServerMonitorApp:
             self.sourceTV_button.config(state=tk.DISABLED)
 
     def update_player_list(self, players):
-        """Update player list"""
+        # Update player list
         self.player_listbox.delete(0, tk.END)
         
         if not players:
@@ -689,7 +690,7 @@ class ServerMonitorApp:
             self.player_listbox.insert(tk.END, f"{name}{playtime}")
 
     def log_and_update_graph(self, current_map, player_count, players):
-        """Log data and update graph"""
+        # Log data and update graph
         current_time = datetime.now(timezone.utc).strftime('%H:%M:%S')
         self.timestamps.append(current_time)
         self.player_counts.append(player_count)
@@ -704,7 +705,7 @@ class ServerMonitorApp:
         self.update_graph()
 
     def update_graph(self):
-        """Update graph"""
+        # Update graph
         if not self.timestamps:
             return
             
@@ -726,7 +727,7 @@ class ServerMonitorApp:
         self.canvas.draw()
 
     def update_ordinance_time(self):
-        """Update ordinance time every second"""
+        # Update ordinance time every second
         current_utc = datetime.now(timezone.utc)
         time_diff = current_utc - ORDINANCE_START
 
@@ -742,7 +743,7 @@ class ServerMonitorApp:
             self.root.after(1000, self.update_ordinance_time)
 
     def play_sound(self, sound_file):
-        """Play sound file"""
+        # Play sound file
         if not PYGAME_AVAILABLE:
             return
         try:
@@ -751,13 +752,13 @@ class ServerMonitorApp:
                 sound = pygame.mixer.Sound(sound_path)
                 # Set volume to 50% for join.wav and information.wav
                 if sound_file in ("join.wav", "information.wav"):
-                    sound.set_volume(0.5)
+                    sound.set_volume(0.25)
                 sound.play()
         except Exception:
             pass
 
     def check_map_change(self, new_map):
-        """Check for map change"""
+        # Check for map change
         if self.current_map is not None and self.current_map != new_map:
             if new_map == "ordinance":
                 self.play_sound("ordinance.wav")
@@ -774,16 +775,16 @@ class ServerMonitorApp:
         self.current_map = new_map
 
     def start_websocket_monitor(self):
-        """Start WebSocket monitor"""
+        # Start WebSocket monitor
         self.websocket_thread = threading.Thread(target=self.run_websocket, daemon=True)
         self.websocket_thread.start()
 
     def run_websocket(self):
-        """Run WebSocket connection"""
+        # Run WebSocket connection
         asyncio.run(self.websocket_handler())
 
     async def websocket_handler(self):
-        """Handle WebSocket connection"""
+        # Handle WebSocket connection
         uri = VIEWS_WEBSOCKET_URL
         
         while self.websocket_running:
@@ -804,7 +805,7 @@ class ServerMonitorApp:
                 await asyncio.sleep(5)
 
     def process_websocket_message(self, message):
-        """Process WebSocket message"""
+        # Process WebSocket message
         try:
             data = json.loads(message)
             if data.get('type') == 'NEW_VIEW':
@@ -825,24 +826,24 @@ class ServerMonitorApp:
             self.root.after(0, self.update_views_status, f"Error processing message: {str(e)}")
 
     def update_views_display(self, view_id, timestamp):
-        """Update views display"""
+        # Update views display
         self.views_label.config(text=f"Current View ID: {view_id}")
         self.last_view_time_label.config(text=f"Last View Time: {timestamp}")
         self.update_views_status("New view received")
 
     def update_views_status(self, message):
-        """Update views status"""
+        # Update views status
         self.views_status.config(text=f"Status: {message}")
 
     def on_close(self):
-        """Clean up on close"""
+        # Clean up on close
         self.play_sound("close.wav")
         # wait for close.wav to finish playing before closing
         if PYGAME_AVAILABLE:
             import pygame
             start = time.time()
-            # wait up to 2 seconds for sound to finish
-            while pygame.mixer.get_busy() and time.time() - start < 2:
+            # wait up to 1 seconds for sound to finish
+            while pygame.mixer.get_busy() and time.time() - start < 1:
                 self.root.update()
                 time.sleep(0.05)
         self.running = False
@@ -850,7 +851,7 @@ class ServerMonitorApp:
         self.root.destroy()
 
 def center_window(window, width, height):
-    """Center window on screen"""
+    # Center window on screen
     window.update_idletasks()
     screen_width = window.winfo_screenwidth()
     screen_height = window.winfo_screenheight()
@@ -859,7 +860,7 @@ def center_window(window, width, height):
     window.geometry(f"{width}x{height}+{x}+{y}")
 
 def show_thank_you():
-    """Show splash screen"""
+    # Show splash screen
     splash = tk.Tk()
     splash.title("Welcome to Reployer")
     splash.configure(bg="#2d2d2d")
@@ -871,7 +872,11 @@ def show_thank_you():
             splash.iconbitmap(icon_path)
     except Exception:
         pass
-    center_window(splash, 500, 375)
+    # Make splash screen always on top
+    try:
+        splash.attributes('-topmost', True)
+    except Exception:
+        pass
 
     # Play a random preopenX.mp3 sound at 50% volume
     try:
@@ -932,6 +937,9 @@ def show_thank_you():
     loading_var = tk.StringVar(value="Loading")
     loading_label = tk.Label(splash, textvariable=loading_var, font=("Arial", 14), bg="#2d2d2d", fg="#ffffff")
     loading_label.pack(pady=10)
+
+    # Center window after all widgets are packed
+    center_window(splash, 500, 375)
 
     def animate_loading(count=0):
         dots = '.' * ((count % 4) + 1)
