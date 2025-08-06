@@ -881,7 +881,12 @@ def show_thank_you():
     # Play a random preopenX.mp3 sound at 50% volume
     try:
         import random
-        preopen_files = ["preopen1.mp3", "preopen2.mp3", "preopen3.mp3"]
+        preopen_files = [
+            "preopen1.mp3", "preopen2.mp3", "preopen3.mp3", "preopen4.mp3", "preopen5.mp3", "preopen6.mp3", "preopen7.mp3", "preopen8.mp3", "preopen9.mp3",
+            "preopen10.mp3", "preopen11.mp3", "preopen12.mp3", "preopen13.mp3", "preopen14.mp3", "preopen15.mp3", "preopen16.mp3", "preopen17.mp3",
+            "preopen18.mp3", "preopen19.mp3", "preopen20.mp3", "preopen21.mp3", "preopen22.mp3", "preopen23.mp3", "preopen24.mp3", "preopen25.mp3",
+            "preopen26.mp3",
+            ]
         chosen = random.choice(preopen_files)
         sound_path = os.path.join("resources", chosen)
         if os.path.exists(sound_path):
