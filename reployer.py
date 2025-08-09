@@ -863,7 +863,7 @@ def show_thank_you():
     # Show splash screen
     splash = tk.Tk()
     splash.title("Welcome to Reployer")
-    splash.configure(bg="#2d2d2d")
+    splash.configure(bg="#1e1e1e")
     splash.overrideredirect(True)  # Remove window top bar
     # Set splash icon to sourceclown.ico
     try:
@@ -881,12 +881,7 @@ def show_thank_you():
     # Play a random preopenX.mp3 sound at 50% volume
     try:
         import random
-        preopen_files = [
-            "preopen1.mp3", "preopen2.mp3", "preopen3.mp3", "preopen4.mp3", "preopen5.mp3", "preopen6.mp3", "preopen7.mp3", "preopen8.mp3", "preopen9.mp3",
-            "preopen10.mp3", "preopen11.mp3", "preopen12.mp3", "preopen13.mp3", "preopen14.mp3", "preopen15.mp3", "preopen16.mp3", "preopen17.mp3",
-            "preopen18.mp3", "preopen19.mp3", "preopen20.mp3", "preopen21.mp3", "preopen22.mp3", "preopen23.mp3", "preopen24.mp3", "preopen25.mp3",
-            "preopen26.mp3",
-            ]
+        preopen_files = ["preopen1.mp3", "preopen2.mp3", "preopen3.mp3"]
         chosen = random.choice(preopen_files)
         sound_path = os.path.join("resources", chosen)
         if os.path.exists(sound_path):
@@ -904,7 +899,7 @@ def show_thank_you():
     # Display gaq9.png and sourceclown.png side by side at the top, with sourceclown.png resized to match gaq9.png
     try:
         from tkinter import PhotoImage
-        img_frame = tk.Frame(splash, bg="#2d2d2d")
+        img_frame = tk.Frame(splash, bg="#1e1e1e")
         img_frame.pack(side=tk.TOP, pady=(10, 0))
         gaq9_path = os.path.join("resources", "gaq9.png")
         sourceclown_path = os.path.join("resources", "sourceclown.png")
@@ -913,7 +908,7 @@ def show_thank_you():
         if os.path.exists(gaq9_path):
             splash.gaq9_img = PhotoImage(file=gaq9_path)
             gaq9_img = splash.gaq9_img
-            gaq9_label = tk.Label(img_frame, image=gaq9_img, bg="#2d2d2d")
+            gaq9_label = tk.Label(img_frame, image=gaq9_img, bg="#1e1e1e")
             gaq9_label.pack(side=tk.LEFT, padx=(0, 10))
         if os.path.exists(sourceclown_path) and gaq9_img is not None:
             try:
@@ -928,19 +923,19 @@ def show_thank_you():
                 # Fallback: show original size if PIL not available
                 splash.sourceclown_img = PhotoImage(file=sourceclown_path)
                 sourceclown_img = splash.sourceclown_img
-            sourceclown_label = tk.Label(img_frame, image=sourceclown_img, bg="#2d2d2d")
+            sourceclown_label = tk.Label(img_frame, image=sourceclown_img, bg="#1e1e1e")
             sourceclown_label.pack(side=tk.LEFT)
     except Exception:
         pass
 
-    label = tk.Label(splash, text="Thank you for downloading Reployer!", font=("Arial", 16, "bold"), bg="#2d2d2d", fg="#4fc3f7")
+    label = tk.Label(splash, text="Thank you for downloading Reployer!", font=("Arial", 16, "bold"), bg="#1e1e1e", fg="#4fc3f7")
     label.pack(pady=(5, 0))
 
-    author_label = tk.Label(splash, text="Made by Kiverix (the clown)", font=("Arial", 12), bg="#2d2d2d", fg="#ffffff")
+    author_label = tk.Label(splash, text="Made by Kiverix (the clown)", font=("Arial", 12), bg="#1e1e1e", fg="#ffffff")
     author_label.pack(pady=(5, 0))
 
     loading_var = tk.StringVar(value="Loading")
-    loading_label = tk.Label(splash, textvariable=loading_var, font=("Arial", 14), bg="#2d2d2d", fg="#ffffff")
+    loading_label = tk.Label(splash, textvariable=loading_var, font=("Arial", 14), bg="#1e1e1e", fg="#ffffff")
     loading_label.pack(pady=10)
 
     # Center window after all widgets are packed
