@@ -16,7 +16,8 @@ import json
 import webbrowser
 
 # Constants
-CGE7_193 = ('79.127.217.197', 22912)
+# CGE7_193 = ('79.127.217.197', 22912) # old server ip
+CGE7_193 = ('169.150.249.133', 22912) # new server IP since 14/08/25
 TIMEOUT = 5
 CSV_FILENAME = "player_log.csv"
 ORDINANCE_START = datetime(2025, 4, 25, 0, 0, 0, tzinfo=timezone.utc)
@@ -70,7 +71,7 @@ class ServerMonitorApp:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Reployer v2.5 - Made by Kiverix 'the clown'")
+        self.root.title("Reployer v2.6 - Made by Kiverix 'the clown'")
         self.root.geometry("1500x1000")
 
         self.create_custom_title_bar()  # Custom title bar
@@ -106,6 +107,9 @@ class ServerMonitorApp:
         self.play_sound("open.wav")
         self.update_map_display()
 
+        # Query failure tracking
+        self.query_fail_count = 0
+
     def create_custom_title_bar(self):
         # Custom title bar with close and minimize buttons
         self.title_bar = tk.Frame(self.root, bg="#232323", relief=tk.RAISED, bd=0, height=32)
@@ -114,7 +118,7 @@ class ServerMonitorApp:
         self.title_bar.bind('<B1-Motion>', self.on_move)
 
         # App title
-        title_label = tk.Label(self.title_bar, text="Reployer v2.5 - With Love, by Kiverix", bg="#232323", fg="#4fc3f7", font=("Arial", 12, "bold"))
+        title_label = tk.Label(self.title_bar, text="Reployer v2.6 - With Love, by Kiverix", bg="#232323", fg="#4fc3f7", font=("Arial", 12, "bold"))
         title_label.pack(side=tk.LEFT, padx=10)
 
         # Close button (rightmost)
@@ -386,7 +390,12 @@ class ServerMonitorApp:
         self.current_map_cycle_label.config(text=f"Current Map Cycle: {current_map}")
         self.adjacent_maps_label.config(text=f"Previous: {prev_map} | Next: {next_map}")
         self.countdown_label.config(text=f"Next cycle in: {mins_left:02d}m {secs_left:02d}s")
-        self.restart_status_label.config(text=f"Server Status: {restart_status}", foreground=status_color)
+
+        # If offline, always override status label
+        if hasattr(self, 'query_fail_count') and self.query_fail_count >= 5:
+            self.restart_status_label.config(text="Server Status: OFFLINE", foreground="red")
+        else:
+            self.restart_status_label.config(text=f"Server Status: {restart_status}", foreground=status_color)
 
         # Play sounds
         self.handle_time_warning_sounds(utc_now)
@@ -476,12 +485,12 @@ class ServerMonitorApp:
     def connect_to_cge(self):
         # Connect to CGE7-193 server
         self.play_sound("join.wav")
-        self.launch_tf2_with_connect("connect 79.127.217.197:22912")
+        self.launch_tf2_with_connect("connect 169.150.249.133:22912")
 
     def connect_to_sourceTV(self):
         # Connect to SourceTV server
         self.play_sound("join.wav")
-        self.launch_tf2_with_connect("connect 79.127.217.197:22913")
+        self.launch_tf2_with_connect("connect 169.150.249.133:22913")
 
     def show_tf2_not_installed(self):
         # Show splash window if TF2 is not installed
@@ -605,8 +614,14 @@ class ServerMonitorApp:
     def update_server_info(self):
         # Update server info
         info, player_count, players = self.get_server_info()
-        
+
+        # Track online/offline state for sound feedback
+        if not hasattr(self, '_last_online_state'):
+            # None means unknown, True means offline, False means online
+            self._last_online_state = None
+
         if info is None:
+            self.query_fail_count += 1
             query_status = "\u2717 Query failed"
             if self.server_info is not None:
                 info = self.server_info
@@ -615,13 +630,38 @@ class ServerMonitorApp:
             if self.player_list:
                 players = self.player_list
         else:
+            self.query_fail_count = 0
             query_status = "\u2713 Query successful"
             self.server_info = info
             self.player_list = players
 
-        current_map = self.update_server_display(info, player_count, query_status)
+        # Determine current online/offline state
+        offline_now = self.query_fail_count >= 5 or (self.query_fail_count > 0 and not info)
+        online_now = not offline_now and info is not None
+
+        # Only play sound on actual state transition
+        if self._last_online_state is None:
+            # First run, set state but don't play sound
+            self._last_online_state = offline_now
+        elif self._last_online_state != offline_now:
+            # State changed
+            if offline_now:
+                self.play_sound("offline.wav")
+            else:
+                self.play_sound("online.wav")
+            self._last_online_state = offline_now
+
+        # If currently offline, stay offline until a successful query
+        if offline_now:
+            self.restart_status_label.config(text="Server Status: OFFLINE", foreground="red")
+            self.cge_button.config(state=tk.DISABLED)
+            self.sourceTV_button.config(state=tk.DISABLED)
+        elif info:
+            current_map = self.update_server_display(info, player_count, query_status)
+            self.update_button_states(current_map)
+
         self.update_player_list(players)
-        self.log_and_update_graph(current_map, player_count, players)
+        self.log_and_update_graph(info.map_name if info else "Unknown", player_count, players)
         # Only call update_ordinance_time once at startup, it will reschedule itself
         if not hasattr(self, '_ordinance_timer_started'):
             self._ordinance_timer_started = True
