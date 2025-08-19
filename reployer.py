@@ -392,7 +392,7 @@ class ServerMonitorApp:
         self.countdown_label.config(text=f"Next cycle in: {mins_left:02d}m {secs_left:02d}s")
 
         # If offline, always override status label
-        if hasattr(self, 'query_fail_count') and self.query_fail_count >= 5:
+        if hasattr(self, 'query_fail_count') and self.query_fail_count >= 15:
             self.restart_status_label.config(text="Server Status: OFFLINE", foreground="red")
         else:
             self.restart_status_label.config(text=f"Server Status: {restart_status}", foreground=status_color)
